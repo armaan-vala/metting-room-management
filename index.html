@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Room Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; padding: 20px; }
+        .grid-container { overflow-x: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        
+        /* Box Styles */
+        .slot-box {
+            height: 60px;
+            min-width: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-align: center;
+            padding: 5px;
+        }
+        .slot-box:hover { transform: scale(1.05); }
+        
+        /* Colors based on Status */
+        .available { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .occupied { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; cursor: not-allowed; }
+        
+        .room-header { font-weight: bold; background-color: #343a40; color: white; vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="mb-4 text-center">🏢 Meeting Room Booking System</h2>
+
+    <div class="row mb-4 justify-content-center">
+        <div class="col-md-4 d-flex gap-2">
+            <input type="date" id="datePicker" class="form-control">
+            <button onclick="loadDashboard()" class="btn btn-primary">Refresh Grid</button>
+        </div>
+    </div>
+
+    <div class="grid-container">
+        <table class="table table-bordered text-center">
+            <thead class="table-dark">
+                <tr>
+                    <th>Room</th>
+                    <th>10-11 AM</th>
+                    <th>11-12 PM</th>
+                    <th>12-1 PM</th>
+                    <th>1-2 PM</th>
+                    <th>2-3 PM</th>
+                    <th>3-4 PM</th>
+                    <th>4-5 PM</th>
+                    <th>5-6 PM</th>
+                    <th>6-7 PM</th>
+                </tr>
+            </thead>
+            <tbody id="gridBody">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const API_URL = "http://127.0.0.1:8000";
+
+    // 1. Set Default Date to Today
+    document.getElementById('datePicker').valueAsDate = new Date();
+
+    // 2. Load Data Function
+    async function loadDashboard() {
+        const date = document.getElementById('datePicker').value;
+        const tbody = document.getElementById('gridBody');
+        tbody.innerHTML = '<tr><td colspan="10">Loading...</td></tr>';
+
+        try {
+            const response = await fetch(`${API_URL}/dashboard-grid?target_date=${date}`);
+            const data = await response.json();
+            
+            tbody.innerHTML = ''; // Clear loading text
+
+            data.forEach(room => {
+                let rowHtml = `<tr><td class="room-header">Room ${room.room_id}</td>`;
+                
+                room.schedule.forEach(slot => {
+                    const isTaken = slot.status === "occupied";
+                    const cssClass = isTaken ? "occupied" : "available";
+                    const displayText = isTaken ? `🔒 ${slot.team_name}` : "✅ Free";
+                    const clickAction = isTaken ? "" : `onclick="bookSlot(${room.room_id}, ${slot.slot_hour})"`;
+
+                    rowHtml += `
+                        <td class="p-1">
+                            <div class="slot-box ${cssClass}" ${clickAction}>
+                                ${displayText}
+                            </div>
+                        </td>
+                    `;
+                });
+
+                rowHtml += "</tr>";
+                tbody.innerHTML += rowHtml;
+            });
+
+        } catch (error) {
+            console.error(error);
+            alert("Error connecting to backend! Check if server is running.");
+        }
+    }
+
+    // 3. Book Slot Function
+    async function bookSlot(roomId, hour) {
+        const teamName = prompt(`Booking Room ${roomId} for ${hour}:00.\nEnter Team Name:`);
+        
+        if (!teamName) return; // Cancelled
+
+        const date = document.getElementById('datePicker').value;
+
+        try {
+            const response = await fetch(`${API_URL}/book-slot`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    room_id: roomId,
+                    booking_date: date,
+                    slot_hour: hour,
+                    team_name: teamName
+                })
+            });
+
+            if (response.ok) {
+                alert("Booking Successful!");
+                loadDashboard(); // Refresh grid to show red box
+            } else {
+                const err = await response.json();
+                alert("Error: " + err.detail);
+            }
+        } catch (error) {
+            alert("Network Error");
+        }
+    }
+
+    // Load initially
+    loadDashboard();
+</script>
+
+</body>
+</html>
